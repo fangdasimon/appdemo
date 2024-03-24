@@ -1,0 +1,166 @@
+# 手动执行
+stages:
+  - master
+  - test
+
+variables:
+  PROD_DIR: "project-name"
+  TEST_DIR: "test-project-name"
+
+cache: # 缓存
+  paths:
+    - node_modules
+
+deploy-master:
+  stage: master
+  only:
+    - master
+  tags: # 可以不写但是需要配置未标记tag使用某个runner进行执行
+    - shell-runner
+  script:
+    - npm install
+    - npm run build
+    - echo "Variables are $PROD_DIR and $TEST_DIR"
+    - echo "/usr/local/frontend/prod/$PROD_DIR"
+    # 自动信任主机，执行远程服务器的 "pwd; ls"，正好可以查看服务器目录、文件是否正常
+    - sshpass -p $TENCENT_SERVER_PASSWORD ssh -o StrictHostKeyChecking=no root@$TENCENT_SERVER_HOST "pwd;ls;"
+    # 查看远程服务器是否有 spa-deploy-gitlab 目录，如果没有就创建
+    - sshpass -p $TENCENT_SERVER_PASSWORD ssh root@$TENCENT_SERVER_HOST "mkdir -p /usr/local/frontend/prod/$PROD_DIR;"
+    - sshpass -p $TENCENT_SERVER_PASSWORD scp -r ./dist/* root@$TENCENT_SERVER_HOST:/usr/local/frontend/prod/$PROD_DIR
+  when: manual
+  artifacts:
+    paths:
+      - dist
+
+deploy-test:
+  stage: test
+  only:
+    - /^dev\/.*$/
+  tags:
+    - shell-runner
+  script:
+    - npm install
+    - npm run build:test
+    # 非主分支读取不了这些变量，需要把protected标签给去掉才能被大家都读到(默认的)
+    # 自动信任主机，执行远程服务器的 "pwd; ls"，正好可以查看服务器目录、文件是否正常
+    - sshpass -p $TENCENT_SERVER_PASSWORD ssh -o StrictHostKeyChecking=no root@$TENCENT_SERVER_HOST "pwd;ls;"
+    # 查看远程服务器是否有 test-spa-deploy-gitlab 目录，如果没有就创建
+    - sshpass -p $TENCENT_SERVER_PASSWORD ssh root@$TENCENT_SERVER_HOST "mkdir -p /usr/local/frontend/test/$TEST_DIR;"
+    - sshpass -p $TENCENT_SERVER_PASSWORD scp -r ./dist/* root@$TENCENT_SERVER_HOST:/usr/local/frontend/test/$TEST_DIR
+  when: manual
+  artifacts:
+    paths:
+      - dist
+
+# 自动执行
+# stages:
+#   - build
+#   - deploy
+
+# variables:
+#   PROD_DIR: "project-name"
+#   TEST_DIR: "test-project-name"
+
+# cache: # 缓存
+#   paths:
+#     - node_modules
+
+# build-master-job:
+#   stage: build
+#   only:
+#     - master
+#   tags: # tag指定时需要和代码平台配置的tag一致，也可以不写但是需要配置未标记tag使用某个runner进行执行
+#     - shell-runner
+#   script:
+#     - npm install
+#     - npm run build
+#   artifacts:
+#     paths:
+#       - dist
+
+# build-test-job:
+#   stage: build
+#   only:
+#     - /^dev\/.*$/
+#   tags:
+#     - shell-runner
+#   script:
+#     - npm install
+#     - npm run build:test
+#   artifacts:
+#     paths:
+#       - dist
+
+# deploy-master-job:
+#   stage: deploy
+#   only:
+#     - master
+#   tags:
+#     - shell-runner
+#   image: ringcentral/sshpass:latest
+#   script:
+#     # 自动信任主机，执行远程服务器的 "pwd; ls"，正好可以查看服务器目录、文件是否正常
+#     - sshpass -p $TENCENT_SERVER_PASSWORD ssh -o StrictHostKeyChecking=no root@$TENCENT_SERVER_HOST "pwd;ls;"
+#     # 查看远程服务器是否有 spa-deploy-gitlab 目录，如果没有就创建
+#     - sshpass -p $TENCENT_SERVER_PASSWORD ssh root@$TENCENT_SERVER_HOST "mkdir -p /usr/local/frontend/prod/$PROD_DIR;"
+#     - sshpass -p $TENCENT_SERVER_PASSWORD scp -r ./dist/* root@$TENCENT_SERVER_HOST:/usr/local/frontend/prod/$PROD_DIR
+
+# deploy-test-job:
+#   stage: deploy
+#   only:
+#     - /^dev\/.*$/
+#   tags:
+#     - shell-runner
+#   image: ringcentral/sshpass:latest
+#   script:
+#     # 自动信任主机，执行远程服务器的 "pwd; ls"，正好可以查看服务器目录、文件是否正常
+#     - sshpass -p $TENCENT_SERVER_PASSWORD ssh -o StrictHostKeyChecking=no root@$TENCENT_SERVER_HOST "pwd;ls;"
+#     # 查看远程服务器是否有 spa-deploy-gitlab 目录，如果没有就创建
+#     - sshpass -p $TENCENT_SERVER_PASSWORD ssh root@$TENCENT_SERVER_HOST "mkdir -p /usr/local/frontend/test/$TEST_DIR;"
+#     - sshpass -p $TENCENT_SERVER_PASSWORD scp -r ./dist/* root@$TENCENT_SERVER_HOST:/usr/local/frontend/test/$TEST_DIR
+
+# 对象存储
+# stages:
+#   - build
+#   - deploy
+
+# cache: # 缓存
+#   paths:
+#     - node_modules
+
+# build-master-job:
+#   stage: build
+#   only:
+#     - master
+#   tags: # 可以不写但是需要配置未标记tag使用某个runner进行执行
+#     - shell-runner
+#   script:
+#     - npm install
+#     - npm run build
+#   artifacts:
+#     paths:
+#       - dist
+
+# deploy-master-job:
+#   stage: deploy
+#   only:
+#     - master
+#   tags:
+#     - shell-runner
+#   variables:
+#     SECRET_ID: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
+#     SECRET_KEY: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
+#     BUCKET: ${{ secrets.COS_BUCKET }}
+#     REGION: ${{ secrets.COS_REGION }}
+#   script:
+#     # COS
+#     # - pip install coscmd # 这里的pip一直有问题
+#     # - coscmd config -a ${SECRET_ID} -s ${SECRET_KEY} -b ${BUCKET} -r ${REGION}
+#     # - coscmd upload -rs --delete ./dist/ /spa-github-1320786594 -f
+
+#     # OSS
+#     #  - wget https://gosspublic.alicdn.com/ossutil/1.7.14/ossutil64
+#     #  - chmod 755 ossutil64
+#     #  - ./ossutil64 config -i ${accessKeyID} -k ${accessKeySecret} -e ${endPoint} -L CH -c ~/.ossutilconfig
+#     #  - ./ossutil64 -c ~/.ossutilconfig cp -r -f --meta Cache-Control:no-cache dist oss://tutulist-web-static/
+#     #  - ./ossutil64 -c ~/.ossutilconfig cp -r -f --meta Cache-Control:max-age=31536000 dist/assets oss://tutulist-web-static/assets
